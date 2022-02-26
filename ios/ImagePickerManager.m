@@ -348,6 +348,7 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
         if([self.options[@"includeExtra"] boolValue]) {
           asset = [ImagePickerUtils fetchPHAssetOnIOS13:info];
         }
+        NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
 
         if ([info[UIImagePickerControllerMediaType] isEqualToString:(NSString *) kUTTypeImage]) {
             UIImage *image = [ImagePickerManager getUIImageFromInfo:info];
@@ -355,7 +356,7 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
             [assets addObject:[self mapImageToAsset:image data:[NSData dataWithContentsOfURL:[ImagePickerManager getNSURLFromInfo:info]] phAsset:asset]];
         } else {
             NSError *error;
-            NSDictionary *videoAsset = [self mapVideoToAsset:info[UIImagePickerControllerMediaURL] phAsset:asset error:&error];
+            NSMutableDictionary *videoAsset = [self mapVideoToAsset:info[UIImagePickerControllerMediaURL] phAsset:asset error:&error];
                         
             if (videoAsset == nil) {
                 NSString *errorMessage = error.localizedFailureReason;
@@ -363,10 +364,28 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                 self.callback(@[@{@"errorCode": errOthers, @"errorMessage": errorMessage}]);
                 return;
             }
+            NSLog(@"didFinishPickingMediaWithInfo: %@", asset);
+            if (asset != nil) {
+                NSLog(@"didFinishPickingMediaWithInfo: %@", asset);
+                PHImageManager *manager = [PHImageManager defaultManager];
+                PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
+                requestOptions.version = PHVideoRequestOptionsVersionOriginal;
+                [manager requestAVAssetForVideo:asset
+                         options:requestOptions
+                                resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
+                    NSLog(@"requestAVAssetForVideo: %@", asset);
+                    NSLog(@"requestAVAssetForVideo info: %@", info);
+                    AVURLAsset *avasset = (AVURLAsset *)asset;
+                    videoAsset[@"originalUri"] = avasset.URL.absoluteString;
+                    [assets addObject:videoAsset];
+                    response[@"assets"] = assets;
+                    self.callback(@[response]);
+                }];
+                return;
+            }
             [assets addObject:videoAsset];
         }
 
-        NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
         response[@"assets"] = assets;
         self.callback(@[response]);
     };
@@ -441,10 +460,41 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                 dispatch_group_leave(completionGroup);
             }];
         } else if ([provider hasItemConformingToTypeIdentifier:(NSString *)kUTTypeMovie]) {
+            if ([self.options[@"noCopy"] boolValue]) {
+                NSMutableDictionary *videoAsset = [[NSMutableDictionary alloc] init];
+                NSLog(@"didFinishPickingMediaWithInfo2: %@", asset);
+                PHImageManager *manager = [PHImageManager defaultManager];
+                PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
+                requestOptions.version = PHVideoRequestOptionsVersionOriginal;
+                [manager requestAVAssetForVideo:asset
+                         options:requestOptions
+                                resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
+                    NSLog(@"requestAVAssetForVideo: %@", asset);
+                    NSLog(@"requestAVAssetForVideo info: %@", info);
+                    AVURLAsset *avasset = (AVURLAsset *)asset;
+                    videoAsset[@"originalUri"] = avasset.URL.absoluteString;
+                    [assets addObject:videoAsset];
+                    dispatch_group_leave(completionGroup);
+                }];
+            } else {
             [provider loadFileRepresentationForTypeIdentifier:(NSString *)kUTTypeMovie completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
-                [assets addObject:[self mapVideoToAsset:url phAsset:asset error:nil]];
-                dispatch_group_leave(completionGroup);
+                NSMutableDictionary *videoAsset = [self mapVideoToAsset:url phAsset:asset error:nil];
+                NSLog(@"didFinishPickingMediaWithInfo1: %@", asset);
+                PHImageManager *manager = [PHImageManager defaultManager];
+                PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
+                requestOptions.version = PHVideoRequestOptionsVersionOriginal;
+                [manager requestAVAssetForVideo:asset
+                         options:requestOptions
+                                resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
+                    NSLog(@"requestAVAssetForVideo: %@", asset);
+                    NSLog(@"requestAVAssetForVideo info: %@", info);
+                    AVURLAsset *avasset = (AVURLAsset *)asset;
+                    videoAsset[@"originalUri"] = avasset.URL.absoluteString;
+                    [assets addObject:videoAsset];
+                    dispatch_group_leave(completionGroup);
+                }];
             }];
+            }
         } else {
             // The provider didn't have an item matching photo or video (fails on M1 Mac Simulator)
             dispatch_group_leave(completionGroup);

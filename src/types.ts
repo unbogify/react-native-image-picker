@@ -9,6 +9,7 @@ export interface ImageLibraryOptions {
   videoQuality?: AndroidVideoOptions | iOSVideoOptions;
   includeBase64?: boolean;
   includeExtra?: boolean;
+  noCopy?: boolean;
 }
 
 export interface CameraOptions
@@ -21,6 +22,7 @@ export interface CameraOptions
 export interface Asset {
   base64?: string;
   uri?: string;
+  originalUri?: string;
   width?: number;
   height?: number;
   fileSize?: number;
