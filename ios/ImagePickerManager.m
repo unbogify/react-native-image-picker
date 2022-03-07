@@ -370,11 +370,18 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                 PHImageManager *manager = [PHImageManager defaultManager];
                 PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
                 requestOptions.version = PHVideoRequestOptionsVersionOriginal;
+                requestOptions.networkAccessAllowed = true;
                 [manager requestAVAssetForVideo:asset
                          options:requestOptions
                                 resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
-                    NSLog(@"requestAVAssetForVideo: %@", asset);
                     NSLog(@"requestAVAssetForVideo info: %@", info);
+                    NSError *error = [info objectForKey:PHImageErrorKey];
+                    if (error != nil || asset == nil) {
+                        NSString *errorMessage = error ? error.localizedFailureReason : @"no asset returned";
+                        self.callback(@[@{@"errorCode": errOthers, @"errorMessage": errorMessage}]);
+                        return;
+                    }
+                    NSLog(@"requestAVAssetForVideo: %@", asset);
                     AVURLAsset *avasset = (AVURLAsset *)asset;
                     videoAsset[@"originalUri"] = avasset.URL.absoluteString;
                     [assets addObject:videoAsset];
@@ -466,33 +473,28 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                 PHImageManager *manager = [PHImageManager defaultManager];
                 PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
                 requestOptions.version = PHVideoRequestOptionsVersionOriginal;
+                requestOptions.networkAccessAllowed = true;
                 [manager requestAVAssetForVideo:asset
                          options:requestOptions
                                 resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
-                    NSLog(@"requestAVAssetForVideo: %@", asset);
                     NSLog(@"requestAVAssetForVideo info: %@", info);
-                    AVURLAsset *avasset = (AVURLAsset *)asset;
-                    videoAsset[@"originalUri"] = avasset.URL.absoluteString;
-                    [assets addObject:videoAsset];
+                    NSError *error = [info objectForKey:PHImageErrorKey];
+                    if (error == nil && asset != nil) {
+                        NSLog(@"requestAVAssetForVideo: %@", asset);
+                        AVURLAsset *avasset = (AVURLAsset *)asset;
+                        videoAsset[@"originalUri"] = avasset.URL.absoluteString;
+                        [assets addObject:videoAsset];
+                    } else {
+                        NSLog(@"requestAVAssetForVideo: error %@", error.localizedDescription);
+                    }
                     dispatch_group_leave(completionGroup);
                 }];
             } else {
             [provider loadFileRepresentationForTypeIdentifier:(NSString *)kUTTypeMovie completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
                 NSMutableDictionary *videoAsset = [self mapVideoToAsset:url phAsset:asset error:nil];
                 NSLog(@"didFinishPickingMediaWithInfo1: %@", asset);
-                PHImageManager *manager = [PHImageManager defaultManager];
-                PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
-                requestOptions.version = PHVideoRequestOptionsVersionOriginal;
-                [manager requestAVAssetForVideo:asset
-                         options:requestOptions
-                                resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
-                    NSLog(@"requestAVAssetForVideo: %@", asset);
-                    NSLog(@"requestAVAssetForVideo info: %@", info);
-                    AVURLAsset *avasset = (AVURLAsset *)asset;
-                    videoAsset[@"originalUri"] = avasset.URL.absoluteString;
-                    [assets addObject:videoAsset];
-                    dispatch_group_leave(completionGroup);
-                }];
+                [assets addObject:videoAsset];
+                dispatch_group_leave(completionGroup);
             }];
             }
         } else {
