@@ -421,6 +421,7 @@ public class Utils {
         VideoMetadata videoMetadata = new VideoMetadata(uri, context);
 
         map.putString("uri", uri.toString());
+        map.putString("originalUri", uri.toString());
         map.putDouble("fileSize", getFileSize(uri, context));
         map.putInt("duration", videoMetadata.getDuration());
         map.putInt("bitrate", videoMetadata.getBitrate());
