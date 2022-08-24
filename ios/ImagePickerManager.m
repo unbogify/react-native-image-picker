@@ -473,7 +473,9 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                 PHImageManager *manager = [PHImageManager defaultManager];
                 PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
                 requestOptions.version = PHVideoRequestOptionsVersionOriginal;
-                requestOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeHighQualityFormat;
+                if (@available(iOS 14, *)) {
+                    requestOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeHighQualityFormat;
+                }
                 requestOptions.networkAccessAllowed = true;
                 [manager requestAVAssetForVideo:asset
                          options:requestOptions
