@@ -481,13 +481,33 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
                          options:requestOptions
                                 resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
                     NSLog(@"requestAVAssetForVideo info: %@", info);
+                    NSNumber *resultIsInCloud = [info objectForKey:PHImageResultIsInCloudKey];
+                    if (resultIsInCloud != nil) {
+                        videoAsset[@"resultIsInCloud"] = resultIsInCloud;
+                    }
+                    NSNumber *resultIsInDegraded = [info objectForKey:PHImageResultIsDegradedKey];
+                    if (resultIsInDegraded != nil) {
+                        videoAsset[@"resultIsInDegraded"] = resultIsInDegraded;
+                    }
+                    NSNumber *resultRequestID = [info objectForKey:PHImageResultRequestIDKey];
+                    if (resultRequestID != nil) {
+                        videoAsset[@"resultRequestID"] = resultRequestID;
+                    }
+                    NSNumber *cancelled = [info objectForKey:PHImageCancelledKey];
+                    if (cancelled != nil) {
+                        videoAsset[@"cancelled"] = cancelled;
+                    }
                     NSError *error = [info objectForKey:PHImageErrorKey];
+                    if (error != nil) {
+                        videoAsset[@"error"] = error.localizedDescription;
+                    }
                     if (error == nil && asset != nil) {
                         NSLog(@"requestAVAssetForVideo: %@", asset);
                         AVURLAsset *avasset = (AVURLAsset *)asset;
                         videoAsset[@"originalUri"] = avasset.URL.absoluteString;
                         [assets addObject:videoAsset];
                     } else {
+                        videoAsset[@"originalUri"] = nil;
                         NSLog(@"requestAVAssetForVideo: error %@", error.localizedDescription);
                     }
                     dispatch_group_leave(completionGroup);
