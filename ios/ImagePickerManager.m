@@ -427,119 +427,121 @@ RCT_EXPORT_METHOD(launchImageLibrary:(NSDictionary *)options callback:(RCTRespon
 
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results API_AVAILABLE(ios(14))
 {
-    [picker dismissViewControllerAnimated:YES completion:nil];
-
-    if (results.count == 0) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.callback(@[@{@"didCancel": @YES}]);
-        });
-        return;
-    }
-
-    dispatch_group_t completionGroup = dispatch_group_create();
-    NSMutableArray<NSDictionary *> *assets = [[NSMutableArray alloc] initWithCapacity:results.count];
-
-    for (PHPickerResult *result in results) {
-        PHAsset *asset = nil;
-        NSItemProvider *provider = result.itemProvider;
-
-        // If include extra, we fetch the PHAsset, this required library permissions
-        if([self.options[@"includeExtra"] boolValue] && result.assetIdentifier != nil) {
-            PHFetchResult* fetchResult = [PHAsset fetchAssetsWithLocalIdentifiers:@[result.assetIdentifier] options:nil];
-            asset = fetchResult.firstObject;
+    dispatch_block_t dismissCompletionBlock = ^{
+        if (results.count == 0) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.callback(@[@{@"didCancel": @YES}]);
+            });
+            return;
         }
 
-        dispatch_group_enter(completionGroup);
+        dispatch_group_t completionGroup = dispatch_group_create();
+        NSMutableArray<NSDictionary *> *assets = [[NSMutableArray alloc] initWithCapacity:results.count];
 
-        if ([provider canLoadObjectOfClass:[UIImage class]]) {
-            NSString *identifier = provider.registeredTypeIdentifiers.firstObject;
-            // Matches both com.apple.live-photo-bundle and com.apple.private.live-photo-bundle
-            if ([identifier containsString:@"live-photo-bundle"]) {
-                // Handle live photos
-                identifier = @"public.jpeg";
+        for (PHPickerResult *result in results) {
+            PHAsset *asset = nil;
+            NSItemProvider *provider = result.itemProvider;
+
+            // If include extra, we fetch the PHAsset, this required library permissions
+            if([self.options[@"includeExtra"] boolValue] && result.assetIdentifier != nil) {
+                PHFetchResult* fetchResult = [PHAsset fetchAssetsWithLocalIdentifiers:@[result.assetIdentifier] options:nil];
+                asset = fetchResult.firstObject;
             }
 
-            [provider loadFileRepresentationForTypeIdentifier:identifier completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
-                NSData *data = [[NSData alloc] initWithContentsOfURL:url];
-                UIImage *image = [[UIImage alloc] initWithData:data];
+            dispatch_group_enter(completionGroup);
 
-                [assets addObject:[self mapImageToAsset:image data:data phAsset:asset]];
-                dispatch_group_leave(completionGroup);
-            }];
-        } else if ([provider hasItemConformingToTypeIdentifier:(NSString *)kUTTypeMovie]) {
-            if ([self.options[@"noCopy"] boolValue]) {
-                NSMutableDictionary *videoAsset = [[NSMutableDictionary alloc] init];
-                NSLog(@"didFinishPickingMediaWithInfo2: %@", asset);
-                PHImageManager *manager = [PHImageManager defaultManager];
-                PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
-                requestOptions.version = PHVideoRequestOptionsVersionOriginal;
-                if (@available(iOS 14, *)) {
-                    requestOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeHighQualityFormat;
+            if ([provider canLoadObjectOfClass:[UIImage class]]) {
+                NSString *identifier = provider.registeredTypeIdentifiers.firstObject;
+                // Matches both com.apple.live-photo-bundle and com.apple.private.live-photo-bundle
+                if ([identifier containsString:@"live-photo-bundle"]) {
+                    // Handle live photos
+                    identifier = @"public.jpeg";
                 }
-                requestOptions.networkAccessAllowed = true;
-                [manager requestAVAssetForVideo:asset
-                         options:requestOptions
-                                resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
-                    NSLog(@"requestAVAssetForVideo info: %@", info);
-                    NSNumber *resultIsInCloud = [info objectForKey:PHImageResultIsInCloudKey];
-                    if (resultIsInCloud != nil) {
-                        videoAsset[@"resultIsInCloud"] = resultIsInCloud;
-                    }
-                    NSNumber *resultIsInDegraded = [info objectForKey:PHImageResultIsDegradedKey];
-                    if (resultIsInDegraded != nil) {
-                        videoAsset[@"resultIsInDegraded"] = resultIsInDegraded;
-                    }
-                    NSNumber *resultRequestID = [info objectForKey:PHImageResultRequestIDKey];
-                    if (resultRequestID != nil) {
-                        videoAsset[@"resultRequestID"] = resultRequestID;
-                    }
-                    NSNumber *cancelled = [info objectForKey:PHImageCancelledKey];
-                    if (cancelled != nil) {
-                        videoAsset[@"cancelled"] = cancelled;
-                    }
-                    NSError *error = [info objectForKey:PHImageErrorKey];
-                    if (error != nil) {
-                        videoAsset[@"error"] = error.localizedDescription;
-                    }
-                    if (error == nil && asset != nil) {
-                        NSLog(@"requestAVAssetForVideo: %@", asset);
-                        AVURLAsset *avasset = (AVURLAsset *)asset;
-                        videoAsset[@"originalUri"] = avasset.URL.absoluteString;
-                        [assets addObject:videoAsset];
-                    } else {
-                        videoAsset[@"originalUri"] = nil;
-                        NSLog(@"requestAVAssetForVideo: error %@", error.localizedDescription);
-                    }
+
+                [provider loadFileRepresentationForTypeIdentifier:identifier completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
+                    NSData *data = [[NSData alloc] initWithContentsOfURL:url];
+                    UIImage *image = [[UIImage alloc] initWithData:data];
+
+                    [assets addObject:[self mapImageToAsset:image data:data phAsset:asset]];
                     dispatch_group_leave(completionGroup);
                 }];
+            } else if ([provider hasItemConformingToTypeIdentifier:(NSString *)kUTTypeMovie]) {
+                if ([self.options[@"noCopy"] boolValue]) {
+                    NSMutableDictionary *videoAsset = [[NSMutableDictionary alloc] init];
+                    NSLog(@"didFinishPickingMediaWithInfo2: %@", asset);
+                    PHImageManager *manager = [PHImageManager defaultManager];
+                    PHVideoRequestOptions *requestOptions = [[PHVideoRequestOptions alloc] init];
+                    requestOptions.version = PHVideoRequestOptionsVersionOriginal;
+                    if (@available(iOS 14, *)) {
+                        requestOptions.deliveryMode = PHVideoRequestOptionsDeliveryModeHighQualityFormat;
+                    }
+                    requestOptions.networkAccessAllowed = true;
+                    [manager requestAVAssetForVideo:asset
+                            options:requestOptions
+                                    resultHandler:^(AVAsset *asset, AVAudioMix *audioMix, NSDictionary *info) {
+                        NSLog(@"requestAVAssetForVideo info: %@", info);
+                        NSNumber *resultIsInCloud = [info objectForKey:PHImageResultIsInCloudKey];
+                        if (resultIsInCloud != nil) {
+                            videoAsset[@"resultIsInCloud"] = resultIsInCloud;
+                        }
+                        NSNumber *resultIsInDegraded = [info objectForKey:PHImageResultIsDegradedKey];
+                        if (resultIsInDegraded != nil) {
+                            videoAsset[@"resultIsInDegraded"] = resultIsInDegraded;
+                        }
+                        NSNumber *resultRequestID = [info objectForKey:PHImageResultRequestIDKey];
+                        if (resultRequestID != nil) {
+                            videoAsset[@"resultRequestID"] = resultRequestID;
+                        }
+                        NSNumber *cancelled = [info objectForKey:PHImageCancelledKey];
+                        if (cancelled != nil) {
+                            videoAsset[@"cancelled"] = cancelled;
+                        }
+                        NSError *error = [info objectForKey:PHImageErrorKey];
+                        if (error != nil) {
+                            videoAsset[@"error"] = error.localizedDescription;
+                        }
+                        if (error == nil && asset != nil) {
+                            NSLog(@"requestAVAssetForVideo: %@", asset);
+                            AVURLAsset *avasset = (AVURLAsset *)asset;
+                            videoAsset[@"originalUri"] = avasset.URL.absoluteString;
+                            [assets addObject:videoAsset];
+                        } else {
+                            videoAsset[@"originalUri"] = nil;
+                            NSLog(@"requestAVAssetForVideo: error %@", error.localizedDescription);
+                        }
+                        dispatch_group_leave(completionGroup);
+                    }];
+                } else {
+                [provider loadFileRepresentationForTypeIdentifier:(NSString *)kUTTypeMovie completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
+                    NSMutableDictionary *videoAsset = [self mapVideoToAsset:url phAsset:asset error:nil];
+                    NSLog(@"didFinishPickingMediaWithInfo1: %@", asset);
+                    [assets addObject:videoAsset];
+                    dispatch_group_leave(completionGroup);
+                }];
+                }
             } else {
-            [provider loadFileRepresentationForTypeIdentifier:(NSString *)kUTTypeMovie completionHandler:^(NSURL * _Nullable url, NSError * _Nullable error) {
-                NSMutableDictionary *videoAsset = [self mapVideoToAsset:url phAsset:asset error:nil];
-                NSLog(@"didFinishPickingMediaWithInfo1: %@", asset);
-                [assets addObject:videoAsset];
+                // The provider didn't have an item matching photo or video (fails on M1 Mac Simulator)
                 dispatch_group_leave(completionGroup);
-            }];
-            }
-        } else {
-            // The provider didn't have an item matching photo or video (fails on M1 Mac Simulator)
-            dispatch_group_leave(completionGroup);
-        }
-    }
-
-    dispatch_group_notify(completionGroup, dispatch_get_main_queue(), ^{
-        //  mapVideoToAsset can fail and return nil.
-        for (NSDictionary *asset in assets) {
-            if (nil == asset) {
-                self.callback(@[@{@"errorCode": errOthers}]);
-                return;
             }
         }
 
-        NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
-        [response setObject:assets forKey:@"assets"];
+        dispatch_group_notify(completionGroup, dispatch_get_main_queue(), ^{
+            //  mapVideoToAsset can fail and return nil.
+            for (NSDictionary *asset in assets) {
+                if (nil == asset) {
+                    self.callback(@[@{@"errorCode": errOthers}]);
+                    return;
+                }
+            }
 
-        self.callback(@[response]);
-    });
+            NSMutableDictionary *response = [[NSMutableDictionary alloc] init];
+            [response setObject:assets forKey:@"assets"];
+
+            self.callback(@[response]);
+        });
+    };
+
+    [picker dismissViewControllerAnimated:YES completion:dismissCompletionBlock];
 }
 
 @end
